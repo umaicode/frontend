@@ -5,7 +5,7 @@ interface AuthLayoutProps {
   showHeader?: boolean;
 }
 
-const AuthLayout: React.FC<AuthLayoutProps> = ({ children, showHeader = true }) => {
+const AuthLayout = ({ children, showHeader = true }: AuthLayoutProps) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-400">
       {/* 헤더 */}

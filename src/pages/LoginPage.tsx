@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,7 +10,7 @@ import { loginSchema } from '../utils/validation';
 import type { LoginFormData } from '../utils/validation';
 import { login } from '../api/auth.api';
 
-const LoginPage: React.FC = () => {
+const LoginPage = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');

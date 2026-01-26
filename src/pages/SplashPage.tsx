@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
 
-const SplashPage: React.FC = () => {
+const SplashPage = () => {
   const navigate = useNavigate();
 
   // 2초 후 자동으로 로그인 페이지로 이동 (선택사항)

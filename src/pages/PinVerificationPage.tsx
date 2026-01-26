@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthLayout from '../components/layouts/AuthLayout';
 import Button from '../components/common/Button';
@@ -11,7 +11,7 @@ interface LocationState {
   expiresAt: string;
 }
 
-const PinVerificationPage: React.FC = () => {
+const PinVerificationPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuthStore();
