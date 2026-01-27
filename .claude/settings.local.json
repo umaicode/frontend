@@ -1,11 +1,12 @@
 {
   "model": "sonnet",
-  "statusLine": {
-    "type": "command",
-    "command": "powershell -NoProfile -Command \"$in = $input | Out-String | ConvertFrom-Json; $branch = git branch --show-current 2>$null; if (-not $branch) { $branch = 'No Git' }; Write-Host ('🤖 ' + $in.model.display_name + ' | 🌿 ' + $branch)\""
-  },
-  "autoUpdatesChannel": "latest",
   "enabledMcpjsonServers": [
     "context7"
-  ]
+  ],
+  "statusLine": {
+    "type": "command",
+    "command": "input=$(cat); model=$(echo \"$input\" | jq -r '.model.display_name'); project=$(echo \"$input\" | jq -r '.workspace.project_dir' | xargs basename); branch=$(cd \"$(echo \"$input\" | jq -r '.workspace.project_dir')\" && git branch --show-current 2>/dev/null || echo \"no-git\"); printf \"\\033[96m📦 %s\\033[0m \\033[95m🤖 %s\\033[0m \\033[92m🌿 %s\\033[0m\" \"$project\" \"$model\" \"$branch\""
+  },
+  "autoUpdatesChannel": "latest",
+  "enableAllProjectMcpServers": true
 }
