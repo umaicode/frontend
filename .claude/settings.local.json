@@ -1,4 +1,10 @@
 {
+  "model": "sonnet",
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -Command \"$in = $input | Out-String | ConvertFrom-Json; $branch = git branch --show-current 2>$null; if (-not $branch) { $branch = 'No Git' }; Write-Host ('🤖 ' + $in.model.display_name + ' | 🌿 ' + $branch)\""
+  },
+  "autoUpdatesChannel": "latest",
   "enabledMcpjsonServers": [
     "context7"
   ]
