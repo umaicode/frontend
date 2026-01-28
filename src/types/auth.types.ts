@@ -9,7 +9,7 @@ export interface User {
 // 1단계: 인증번호 발송 요청
 export interface SendCodeRequest {
   email: string;              // Mattermost 이메일
-  password: string;           // 4자리 비밀번호 (로봇 인증용)
+  password: number;           // 4자리 비밀번호 (로봇 인증용)
 }
 
 // 1단계: 인증번호 발송 응답

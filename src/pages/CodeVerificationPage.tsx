@@ -89,11 +89,19 @@ const CodeVerificationPage = () => {
       setIsLoading(true);
       setApiError('');
 
-      // CODE 인증 API 호출 (이메일 + 선택한 CODE)
-      const response = await login({
+      // 디버깅: 전송할 데이터 확인
+      const requestData = {
         email,
         code: selectedCode,
-      });
+      };
+      console.log('=== CODE 인증 요청 데이터 ===');
+      console.log('Email:', email);
+      console.log('Selected Code:', selectedCode, '(type:', typeof selectedCode, ')');
+      console.log('Correct Code:', correctCode, '(type:', typeof correctCode, ')');
+      console.log('Request Data:', requestData);
+
+      // CODE 인증 API 호출 (이메일 + 선택한 CODE)
+      const response = await login(requestData);
 
       // Zustand 스토어에 토큰 저장 (accessToken + refreshToken)
       loginStore(

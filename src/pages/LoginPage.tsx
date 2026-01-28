@@ -30,9 +30,12 @@ const LoginPage = () => {
       // 인증번호 발송 API 호출
       const response = await sendCode({
         email: data.email,
-        password: data.password,
+        password: parseInt(data.password, 10), // string을 number로 변환
       });
 
+      console.log('=== 1단계 인증번호 발송 성공 ===');
+      console.log('응답 데이터:', response);
+      console.log('받은 CODE:', response.code, '(type:', typeof response.code, ')');
 
       // CODE 선택 페이지로 이동 (email, code 전달)
       navigate('/login/verify', {
@@ -40,6 +43,7 @@ const LoginPage = () => {
           email: data.email,
           code: response.code, // 실제 CODE 번호 (예: 35)
         },
+        replace: true, // 히스토리 스택을 대체하여 뒤로가기 방지
       });
     } catch (error: any) {
       console.error('Send code error:', error);
