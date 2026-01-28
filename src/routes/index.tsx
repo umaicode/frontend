@@ -6,6 +6,8 @@ import PinVerificationPage from '../pages/PinVerificationPage';
 import HomePage from '../pages/HomePage';
 import TicketScanPage from '../pages/TicketScanPage';
 import TicketDetailPage from '../pages/TicketDetailPage';
+import MissionCreatePage from '../pages/MissionCreatePage';
+import MissionTrackPage from '../pages/MissionTrackPage';
 
 const AppRoutes = () => {
   return (
@@ -22,6 +24,10 @@ const AppRoutes = () => {
         <Route path="/home" element={<HomePage />} />
         <Route path="/ticket/scan" element={<TicketScanPage />} />
         <Route path="/ticket/detail" element={<TicketDetailPage />} />
+
+        {/* 미션 관련 라우트 */}
+        <Route path="/mission/create" element={<MissionCreatePage />} />
+        <Route path="/mission/track" element={<MissionTrackPage />} />
       </Route>
 
       {/* 알 수 없는 경로는 스플래시로 */}

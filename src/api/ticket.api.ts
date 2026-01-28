@@ -9,20 +9,35 @@ import type { TicketScanResponse, TicketInfo } from '../types/ticket.types';
  * @returns 스캔된 티켓 정보
  */
 export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
-  const formData = new FormData();
-  formData.append('image', imageFile);
+  // 🔶 MOCK: 티켓 스캔 목업 데이터
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      console.log('🔶 MOCK: scanTicket 호출됨', imageFile.name);
+      resolve({
+        flight: "KE932",
+        gate: "E23",
+        seat: "40B",
+        boarding_time: "21:20",
+        departure_time: "22:00",
+        origin: "ROME",
+        destination: "INCHEON"
+      });
+    }, 1500); // 1.5초 지연으로 스캔 중 느낌 연출
+  });
 
-  const { data } = await apiClient.post<TicketScanResponse>(
-    '/api/tickets/scan',
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }
-  );
-
-  return data;
+  // 실제 API 호출 (주석 처리)
+  // const formData = new FormData();
+  // formData.append('image', imageFile);
+  // const { data } = await apiClient.post<TicketScanResponse>(
+  //   '/api/tickets/scan',
+  //   formData,
+  //   {
+  //     headers: {
+  //       'Content-Type': 'multipart/form-data',
+  //     },
+  //   }
+  // );
+  // return data;
 };
 
 /**
@@ -32,6 +47,23 @@ export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
  * @returns 최신 티켓 정보
  */
 export const getLatestTicket = async (): Promise<TicketInfo> => {
-  const { data } = await apiClient.get<TicketInfo>('/api/me/tickets/latest');
-  return data;
+  // 🔶 MOCK: 최신 티켓 정보 목업 데이터
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      console.log('🔶 MOCK: getLatestTicket 호출됨');
+      resolve({
+        flight: "KE932",
+        gate: "E23",
+        seat: "40B",
+        boarding_time: "21:20",
+        departure_time: "22:00",
+        origin: "ROME",
+        destination: "INCHEON"
+      });
+    }, 500);
+  });
+
+  // 실제 API 호출 (주석 처리)
+  // const { data } = await apiClient.get<TicketInfo>('/api/me/tickets/latest');
+  // return data;
 };

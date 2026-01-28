@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useTicketStore } from '../store/ticketStore';
 import TicketCard from '../components/ticket/TicketCard';
-import Button from '../components/common/Button';
+import { Button } from '@/components/ui/button';
 
 const TicketDetailPage = () => {
   const navigate = useNavigate();
@@ -50,9 +50,8 @@ const TicketDetailPage = () => {
         {/* 등록 버튼 */}
         <div className="mt-6">
           <Button
-            variant="primary"
             size="lg"
-            fullWidth
+            className="w-full"
             onClick={() => navigate('/home')}
           >
             확인

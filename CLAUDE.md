@@ -20,6 +20,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **React 19**: 최신 React 기능 사용 (Suspense, Transitions, Server Components 고려)
 - **TypeScript 5.9**: 최신 타입 시스템 활용
 - **Tailwind CSS v4**: 최신 유틸리티 클래스 및 CSS 변수 활용
+- **shadcn/ui**: Radix UI 기반 접근성 높은 UI 컴포넌트 시스템
+  - 복사-붙여넣기 방식으로 컴포넌트 소스를 직접 소유
+  - Tailwind CSS와 완벽한 통합
+  - 커스터마이징 가능한 컴포넌트 (Dialog, Button, Input, Card 등)
 - **Context7 활용**: Context7 MCP를 사용하여 최신 라이브러리 문서 참조
 
 ### 현업 코딩 스타일
@@ -137,6 +141,19 @@ npm run lint         # ESLint 실행 (TypeScript + React)
 ### TypeScript 컴파일
 ```bash
 tsc -b              # TypeScript 빌드만 실행 (타입 체크)
+```
+
+### shadcn/ui 컴포넌트 추가
+```bash
+npx shadcn@latest add button     # Button 컴포넌트 추가
+npx shadcn@latest add dialog     # Dialog 컴포넌트 추가
+npx shadcn@latest add card       # Card 컴포넌트 추가
+npx shadcn@latest add input      # Input 컴포넌트 추가
+npx shadcn@latest add badge      # Badge 컴포넌트 추가
+npx shadcn@latest add toast      # Toast 컴포넌트 추가
+
+# 여러 컴포넌트 한번에 추가
+npx shadcn@latest add button dialog card input
 ```
 
 ---
@@ -329,23 +346,51 @@ Admin Routes (ROLE_ADMIN):
 
 ### 8. 컴포넌트 구조
 
-**현재 분류** ✅:
-- **common/**: Button, Input, Checkbox (재사용 가능)
-- **layouts/**: AuthLayout (중앙 정렬 레이아웃)
-- **ticket/**: TicketCard, WebcamScanner, ScanSuccessModal
+**컴포넌트 계층**:
+- **ui/**: shadcn/ui 컴포넌트 (Button, Dialog, Card, Input 등)
+  - CLI로 생성된 재사용 가능 UI primitives
+  - 직접 수정 가능 (소스 코드를 소유)
+  - 예: `@/components/ui/button`, `@/components/ui/dialog`
+
+- **common/**: 자체 공통 컴포넌트 (shadcn/ui로 대체 가능)
+  - 기존: Button, Input, Checkbox
+  - 향후: shadcn/ui로 점진적 마이그레이션 권장
+
+- **layouts/**: 레이아웃 컴포넌트 ✅
+  - AuthLayout (중앙 정렬 레이아웃)
+
+- **ticket/**: 티켓 도메인 컴포넌트 ✅
+  - TicketCard, WebcamScanner, ScanSuccessModal
 
 **추가 필요** 🆕:
 - **mission/**: MissionStatusCard, MissionTimeline, VerificationModal
 - **admin/**: EventLog, MissionCard
 
+**컴포넌트 선택 가이드**:
+```typescript
+// ✅ Good: shadcn/ui 컴포넌트 우선 사용
+import { Button } from "@/components/ui/button"
+import { Dialog } from "@/components/ui/dialog"
+
+// ✅ Good: 도메인 특화 로직은 자체 컴포넌트
+import { TicketCard } from "@/components/ticket/TicketCard"
+import { MissionTimeline } from "@/components/mission/MissionTimeline"
+
+// ❌ Bad: shadcn/ui에 있는데 자체 구현
+import { Button } from "@/components/common/Button" // 대신 ui/button 사용
+```
+
 **패턴**:
 - Props는 interface로 명시
 - children은 `React.ReactNode` 타입
 - 이벤트 핸들러는 `onClick={handleClick}` 형태
+- shadcn/ui 컴포넌트는 `forwardRef` 패턴 사용
 
 ---
 
-## 스타일링 (Tailwind CSS v4)
+## 스타일링 (Tailwind CSS v4 + shadcn/ui)
+
+### Tailwind CSS v4 설정
 
 **설정**: `postcss.config.js`에 `@tailwindcss/postcss` 플러그인 사용
 
@@ -369,6 +414,66 @@ className={cn(
 )}
 ```
 
+### shadcn/ui 컴포넌트 시스템
+
+**개념**: shadcn/ui는 npm 패키지가 아닌 "복사-붙여넣기" 방식의 컴포넌트 시스템입니다.
+
+**특징**:
+- 컴포넌트 소스 코드를 프로젝트에 직접 복사 (`src/components/ui/`)
+- Radix UI 기반의 접근성 높은 primitives 사용
+- Tailwind CSS로 스타일링되어 커스터마이징 용이
+- TypeScript 완벽 지원
+
+**설치 방법**:
+```bash
+# shadcn/ui CLI를 사용하여 컴포넌트 추가
+npx shadcn@latest add button
+npx shadcn@latest add dialog
+npx shadcn@latest add card
+```
+
+**사용 예시**:
+```typescript
+// ✅ Good: shadcn/ui 컴포넌트 사용
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog"
+
+export function MyComponent() {
+  return (
+    <Dialog>
+      <DialogContent>
+        <DialogHeader>제목</DialogHeader>
+        <Button>확인</Button>
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+**커스터마이징**:
+```typescript
+// shadcn/ui 컴포넌트는 소스 코드를 직접 수정 가능
+// src/components/ui/button.tsx에서 variant 추가
+const buttonVariants = cva(
+  "...",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground",
+        destructive: "bg-destructive text-destructive-foreground",
+        custom: "bg-purple-500 text-white", // 🆕 커스텀 variant 추가
+      }
+    }
+  }
+)
+```
+
+**주의사항**:
+- shadcn/ui 컴포넌트는 `src/components/ui/` 폴더에 저장
+- 기존 컴포넌트(`src/components/common/`)와 공존 가능
+- shadcn/ui 우선 사용, 커스텀이 필요한 경우에만 자체 컴포넌트 작성
+- `@/` alias는 `src/` 경로를 가리킴 (`tsconfig.json`에서 설정)
+
 ---
 
 ## 폴더 구조 상세
@@ -381,12 +486,19 @@ src/
 │   ├── ticket.api.ts # 티켓 스캔 API ✅
 │   └── mission.api.ts # 미션 API 🆕
 ├── components/
-│   ├── common/       # Button, Input, Checkbox ✅
+│   ├── ui/           # shadcn/ui 컴포넌트 (CLI로 생성) 🆕
+│   │   ├── button.tsx
+│   │   ├── dialog.tsx
+│   │   ├── card.tsx
+│   │   ├── input.tsx
+│   │   └── ... (필요한 컴포넌트 추가)
+│   ├── common/       # 자체 공통 컴포넌트 (shadcn/ui로 대체 권장) ✅
 │   ├── layouts/      # AuthLayout ✅
 │   ├── ticket/       # TicketCard, WebcamScanner ✅
 │   ├── mission/      # 미션 관련 컴포넌트 🆕
 │   └── admin/        # 관리자 컴포넌트 🆕
 ├── hooks/            # useMissionSSE, useAdminSSE 🆕
+├── lib/              # shadcn/ui 유틸리티 (utils.ts - cn 함수 등) 🆕
 ├── pages/            # 페이지 컴포넌트 (라우트 1:1 매칭)
 ├── routes/           # ProtectedRoute ✅
 ├── store/            # authStore ✅, ticketStore ✅, missionStore 🆕, adminStore 🆕
@@ -468,7 +580,45 @@ try {
 }
 ```
 
-### 5. Context7 활용
+### 5. shadcn/ui 컴포넌트 사용 패턴
+```typescript
+// ❌ Bad: 자체 컴포넌트를 불필요하게 재작성
+const Button = ({ children, onClick }) => (
+  <button className="px-4 py-2 bg-blue-500" onClick={onClick}>
+    {children}
+  </button>
+);
+
+// ✅ Good: shadcn/ui 컴포넌트 활용
+import { Button } from "@/components/ui/button"
+
+<Button variant="default" size="lg" onClick={handleClick}>
+  클릭
+</Button>
+
+// ✅ Good: 커스터마이징이 필요하면 className으로 확장
+<Button className="w-full mt-4">
+  전체 너비 버튼
+</Button>
+
+// ✅ Good: 복잡한 UI는 shadcn/ui 조합
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>미션 생성</DialogTitle>
+    </DialogHeader>
+    <div className="space-y-4">
+      {/* 폼 내용 */}
+    </div>
+    <Button onClick={handleSubmit}>생성</Button>
+  </DialogContent>
+</Dialog>
+```
+
+### 6. Context7 활용
 ```typescript
 // 최신 React 19 패턴 확인 시
 // Context7 MCP를 사용하여 React 공식 문서 조회
@@ -477,6 +627,10 @@ try {
 // 최신 Tailwind CSS v4 문법 확인 시
 // Context7 MCP를 사용하여 Tailwind 문서 조회
 // 예: "Tailwind CSS v4 container queries"
+
+// shadcn/ui 컴포넌트 사용법 확인 시
+// Context7 MCP를 사용하여 shadcn/ui 문서 조회
+// 예: "shadcn/ui Dialog component usage"
 ```
 
 ---
@@ -533,6 +687,34 @@ try {
 - ESLint 경고 확인 후 필요한 의존성 추가
 - 의도적으로 제외하는 경우 `// eslint-disable-next-line` 주석 추가
 - useCallback, useMemo로 함수/객체 메모이제이션
+
+### shadcn/ui 컴포넌트 import 에러
+- `@/` alias가 설정되지 않은 경우: `tsconfig.json`에서 `paths` 설정 확인
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
+- Vite 설정도 필요: `vite.config.ts`에서 `resolve.alias` 확인
+```typescript
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+})
+```
+
+### shadcn/ui 스타일 미적용
+- `src/index.css`에 shadcn/ui CSS 변수 확인
+- Tailwind CSS 설정 확인 (`@import "tailwindcss";`)
+- `components.json` 설정 파일 확인 (shadcn/ui 초기화 시 생성)
 
 ---
 
