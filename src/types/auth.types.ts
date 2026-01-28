@@ -17,16 +17,16 @@ export interface SendCodeResponse {
   status: string;             // "SUCCESS"
   message: string;            // "인증번호가 전송되었습니다."
   expiresIn: number;          // 만료 시간 (초)
-  pin: number;                // PIN 번호 (예: 35)
+  code: number;                // CODE 번호 (예: 35)
 }
 
-// 2단계: PIN 인증 요청
+// 2단계: CODE 인증 요청
 export interface LoginRequest {
   email: string;              // Mattermost 이메일
-  pin: number;                // 선택한 PIN 번호
+  code: number;                // 선택한 CODE 번호
 }
 
-// 2단계: PIN 인증 응답 (토큰 발급)
+// 2단계: CODE 인증 응답 (토큰 발급)
 export interface LoginResponse {
   accessToken: string;        // JWT 액세스 토큰
   refreshToken: string;       // 리프레시 토큰

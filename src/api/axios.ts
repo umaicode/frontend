@@ -24,7 +24,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response Interceptor: 401 에러 시 로그아웃 처리
+// Response Interceptor: 401 에러 시 자동 토큰 갱신
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -34,10 +34,41 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      // TODO: Refresh Token으로 새 Access Token 발급 로직
-      // 지금은 단순히 로그아웃 처리
-      useAuthStore.getState().logout();
-      window.location.href = '/login';
+      try {
+        // Refresh Token으로 새 Access Token 발급
+        const refreshToken = localStorage.getItem('refreshToken');
+
+        if (!refreshToken) {
+          throw new Error('Refresh token not found');
+        }
+
+        const response = await apiClient.post<{ accessToken: string }>(
+          '/api/auth/reissue',
+          null,
+          {
+            headers: {
+              'Authorization-Refresh': `Bearer ${refreshToken}`,
+            },
+          }
+        );
+
+        const { accessToken } = response.data;
+
+        // Store에 새 토큰 저장
+        useAuthStore.getState().setAccessToken(accessToken);
+
+        // 원래 요청에 새 토큰 적용
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+
+        // 원래 요청 재시도
+        return apiClient(originalRequest);
+      } catch (reissueError) {
+        // Refresh Token도 만료된 경우 로그아웃
+        console.error('Token reissue failed:', reissueError);
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+        return Promise.reject(reissueError);
+      }
     }
 
     return Promise.reject(error);

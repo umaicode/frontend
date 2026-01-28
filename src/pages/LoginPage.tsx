@@ -33,11 +33,12 @@ const LoginPage = () => {
         password: data.password,
       });
 
-      // PIN 선택 페이지로 이동 (email, pin 전달)
+
+      // CODE 선택 페이지로 이동 (email, code 전달)
       navigate('/login/verify', {
         state: {
           email: data.email,
-          pin: response.pin, // 실제 PIN 번호 (예: 35)
+          code: response.code, // 실제 CODE 번호 (예: 35)
         },
       });
     } catch (error: any) {

@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import SplashPage from '../pages/SplashPage';
 import LoginPage from '../pages/LoginPage';
-import PinVerificationPage from '../pages/PinVerificationPage';
+import CodeVerificationPage from '../pages/CodeVerificationPage';
 import HomePage from '../pages/HomePage';
 import TicketScanPage from '../pages/TicketScanPage';
 import TicketDetailPage from '../pages/TicketDetailPage';
@@ -17,7 +17,7 @@ const AppRoutes = () => {
 
       {/* 공개 라우트 (로그인 전) */}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/login/verify" element={<PinVerificationPage />} />
+      <Route path="/login/verify" element={<CodeVerificationPage />} />
 
       {/* 보호된 라우트 (로그인 필요) */}
       <Route element={<ProtectedRoute />}>

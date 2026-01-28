@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthLayout from '../components/layouts/AuthLayout';
 import { Button } from '@/components/ui/button';
@@ -7,22 +7,22 @@ import { useAuthStore } from '../store/authStore';
 
 interface LocationState {
   email: string;
-  pin: number; // 실제 PIN (백엔드에서 전달받은 값)
+  code: number; // 실제 CODE (백엔드에서 전달받은 값)
 }
 
 /**
  * 랜덤 2자리 숫자 생성 (10-99)
- * correctPin과 중복되지 않도록
+ * correctCode와 중복되지 않도록
  */
-const generateFakePins = (correctPin: number, count: number): number[] => {
-  const fakePins: number[] = [];
-  while (fakePins.length < count) {
-    const randomPin = Math.floor(Math.random() * 90) + 10; // 10-99
-    if (randomPin !== correctPin && !fakePins.includes(randomPin)) {
-      fakePins.push(randomPin);
+const generateFakeCodes = (correctCode: number, count: number): number[] => {
+  const fakeCodes: number[] = [];
+  while (fakeCodes.length < count) {
+    const randomCode = Math.floor(Math.random() * 90) + 10; // 10-99
+    if (randomCode !== correctCode && !fakeCodes.includes(randomCode)) {
+      fakeCodes.push(randomCode);
     }
   }
-  return fakePins;
+  return fakeCodes;
 };
 
 /**
@@ -37,45 +37,51 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return shuffled;
 };
 
-const PinVerificationPage = () => {
+const CodeVerificationPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login: loginStore } = useAuthStore();
 
   const state = location.state as LocationState;
-  const [selectedPin, setSelectedPin] = useState<number | null>(null);
+  const [selectedCode, setSelectedCode] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
 
-  // state가 없으면 로그인 페이지로 리다이렉트
-  if (!state || !state.email || state.pin === undefined) {
-    navigate('/login');
+  // state가 없으면 로그인 페이지로 리다이렉트 (useEffect 내에서 처리)
+  useEffect(() => {
+    if (!state || !state.email || state.code === undefined) {
+      navigate('/login');
+    }
+  }, [state, navigate]);
+
+  // state가 없으면 렌더링하지 않음
+  if (!state || !state.email || state.code === undefined) {
     return null;
   }
 
-  const { email, pin: correctPin } = state;
+  const { email, code: correctCode } = state;
 
-  // PIN 옵션 생성 (실제 PIN + 가짜 PIN 2개, 섞어서 표시)
+  // CODE 옵션 생성 (실제 CODE + 가짜 CODE 2개, 섞어서 표시)
   // useMemo로 리렌더링 시에도 동일한 값 유지
-  const pinOptions = useMemo(() => {
-    const fakePins = generateFakePins(correctPin, 2);
-    return shuffleArray([correctPin, ...fakePins]);
-  }, [correctPin]);
+  const codeOptions = useMemo(() => {
+    const fakeCodes = generateFakeCodes(correctCode, 2);
+    return shuffleArray([correctCode, ...fakeCodes]);
+  }, [correctCode]);
 
-  const handlePinSelect = (pin: number) => {
-    setSelectedPin(pin);
+  const handleCodeSelect = (code: number) => {
+    setSelectedCode(code);
     setApiError(''); // 에러 초기화
   };
 
   const handleSubmit = async () => {
-    if (selectedPin === null) {
-      setApiError('PIN 번호를 선택해주세요');
+    if (selectedCode === null) {
+      setApiError('CODE 번호를 선택해주세요');
       return;
     }
 
-    // 잘못된 PIN 선택 시 에러 표시 (프론트에서 바로 체크)
-    if (selectedPin !== correctPin) {
-      setApiError('잘못된 PIN입니다. mattermost 메시지를 확인해주세요.');
+    // 잘못된 CODE 선택 시 에러 표시 (프론트에서 바로 체크)
+    if (selectedCode !== correctCode) {
+      setApiError('잘못된 CODE입니다. mattermost 메시지를 확인해주세요.');
       return;
     }
 
@@ -83,18 +89,22 @@ const PinVerificationPage = () => {
       setIsLoading(true);
       setApiError('');
 
-      // PIN 인증 API 호출 (이메일 + 선택한 PIN)
+      // CODE 인증 API 호출 (이메일 + 선택한 CODE)
       const response = await login({
         email,
-        pin: selectedPin,
+        code: selectedCode,
       });
 
-      // Zustand 스토어에 토큰 저장
-      loginStore(response.accessToken, {
-        id: '', // 토큰에서 추출 또는 임시값
-        email,
-        role: 'USER',
-      });
+      // Zustand 스토어에 토큰 저장 (accessToken + refreshToken)
+      loginStore(
+        response.accessToken,
+        response.refreshToken,
+        {
+          id: '', // 토큰에서 추출 또는 임시값
+          email,
+          role: 'USER',
+        }
+      );
 
       // 티켓 스캔 페이지로 이동
       navigate('/ticket/scan');
@@ -122,25 +132,25 @@ const PinVerificationPage = () => {
           Mattermost에서 받은 숫자와 같은 번호를 선택해주세요
         </p>
 
-        {/* PIN 버튼들 */}
+        {/* CODE 버튼들 */}
         <div className="space-y-4 mb-6">
-          {pinOptions.map((pin) => (
+          {codeOptions.map((code) => (
             <button
-              key={pin}
-              onClick={() => handlePinSelect(pin)}
+              key={code}
+              onClick={() => handleCodeSelect(code)}
               className={`
                 w-full h-28
                 text-6xl font-extrabold
                 rounded-2xl
                 border-3
                 transition-all duration-200
-                ${selectedPin === pin
+                ${selectedCode === code
                   ? 'bg-blue-50 border-blue-400 text-gray-900 shadow-md'
                   : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                 }
               `}
             >
-              {pin}
+              {code}
             </button>
           ))}
         </div>
@@ -156,7 +166,7 @@ const PinVerificationPage = () => {
         <Button
           onClick={handleSubmit}
           size="lg"
-          disabled={isLoading || selectedPin === null}
+          disabled={isLoading || selectedCode === null}
           className="w-full"
         >
           {isLoading ? '인증 중...' : '로그인'}
@@ -166,5 +176,4 @@ const PinVerificationPage = () => {
   );
 };
 
-export default PinVerificationPage;
-
+export default CodeVerificationPage;

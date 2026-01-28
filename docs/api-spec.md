@@ -25,7 +25,7 @@
 | 카테고리 | 기능 | 사용자 | Method | Auth | End Point | 설명 |
 |---------|------|--------|--------|------|-----------|------|
 | 인증 | 인증번호 발송 | Guest | POST | X | `/api/auth/code` | 사용자의 이메일로 Mattermost 인증번호를 발송합니다. 이 정보는 DB에 저장되지 않고 Redis에만 3분간 저장됩니다. |
-| 인증 | 로그인 | Guest | POST | X | `/api/auth/login` | 인증번호를 검증합니다. 맞으면 DB에 사용자를 등록(또는 갱신)하고 토큰을 발급합니다. |
+| 인증 | 로그인 | Guest | POST | X | `/api/auth/verify` | 인증번호를 검증합니다. 맞으면 DB에 사용자를 등록(또는 갱신)하고 토큰을 발급합니다. |
 | 인증 | 토큰 재발급 | User | POST | O | `/api/auth/reissue` | Access Token이 만료되었을 때, Refresh Token으로 새 토큰을 받습니다. |
 | 미션 | 미션 생성 | User | POST | O | `/api/missions` | 미션 생성 엔드포인트 |
 | 미션 | 미션 사용자 수신용 SSE 연결 | User | GET | O | `/api/missions/{missionId}/subscribe` | 미션 상태 실시간 구독 (SSE) |
@@ -49,7 +49,7 @@
 
 사용자의 이메일로 Mattermost 인증번호를 발송합니다.
 
-**Endpoint:** `POST /api/auth/code`
+**Endpoint:** `POST /api/auth/request`
 **Auth:** X
 
 #### Request
@@ -57,11 +57,13 @@
 | Key | 설명 | Type | Nullable | 예시 |
 |-----|------|------|----------|------|
 | email | Mattermost 이메일 | String | X | "test@ssafy.com" |
+| password | 4자리 비밀번호 | Integer | X | 1234 |
 
 **Request Body:**
 ```json
 {
-  "email": "ssafy@ssafy.com"
+  "email": "ssafy@ssafy.com",
+  "password": 1234
 }
 ```
 
@@ -70,7 +72,10 @@
 **Success (200):**
 ```json
 {
-  "인증번호가 발송되었습니다."
+  "status": "SUCCESS",
+  "message": "인증번호가 전송되었습니다.",
+  "code": 76,
+  "expiresIn": 300
 }
 ```
 
@@ -86,7 +91,7 @@
 
 인증번호를 검증하고 DB에 사용자를 등록(또는 갱신)하고 토큰을 발급합니다.
 
-**Endpoint:** `POST /api/auth/login`
+**Endpoint:** `POST /api/auth/verify`
 **Auth:** X
 
 #### Request
@@ -94,13 +99,13 @@
 | Key | 설명 | Type | Nullable | 예시 |
 |-----|------|------|----------|------|
 | email | Mattermost 이메일 | String | X | "test@ssafy.com" |
-| code | 인증번호(4자리) | String | X | "1234" |
+| code | 인증번호(2자리) | Integer | X | 35 |
 
 **Request Body:**
 ```json
 {
   "email": "ssafy@ssafy.com",
-  "code": "1234"
+  "code": 35
 }
 ```
 
@@ -110,7 +115,9 @@
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600
 }
 ```
 
@@ -121,7 +128,7 @@
   "status": 500,
   "error": "Internal Server Error",
   "message": "인증번호가 일치하지 않습니다.",
-  "path": "/api/auth/login"
+  "path": "/api/auth/verify"
 }
 ```
 
@@ -144,17 +151,11 @@ Access Token이 만료되었을 때, Refresh Token으로 새 토큰을 받습니
 
 #### Request
 
-| Key | 설명 | Type | Nullable | 예시 |
-|-----|------|------|----------|------|
-| email | Mattermost 이메일 | String | X | "test@ssafy.com" |
-| refreshToken | 리프레시 토큰 | String | X | "eyJhbGciOiJIUzI1NiJ9..." |
+Request Body 없음. HTTP 요청 헤더에 Refresh Token을 전달합니다.
 
-**Request Body:**
-```json
-{
-  "email": "ssafy@ssafy.com",
-  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
-}
+**Headers:**
+```
+Authorization-Refresh: Bearer {RefreshToken}
 ```
 
 #### Response
@@ -162,8 +163,9 @@ Access Token이 만료되었을 때, Refresh Token으로 새 토큰을 받습니
 **Success (200):**
 ```json
 {
-  "accessToken": "new_access_token...",
-  "refreshToken": "original_refresh_token..."
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600
 }
 ```
 
@@ -171,10 +173,10 @@ Access Token이 만료되었을 때, Refresh Token으로 새 토큰을 받습니
 ```json
 {
   "timestamp": "2024-05-21T14:20:30",
-  "status": 500,
-  "error": "Internal Server Error",
-  "message": "인증번호가 일치하지 않습니다.",
-  "path": "/api/auth/login"
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Refresh Token이 만료되었습니다.",
+  "path": "/api/auth/reissue"
 }
 ```
 
@@ -183,8 +185,15 @@ Access Token이 만료되었을 때, Refresh Token으로 새 토큰을 받습니
 | Status | Description |
 |--------|-------------|
 | 200 | 성공 |
+| 401 | Refresh Token 만료 또는 유효하지 않음 |
 | 4xx | Client Error |
 | 5xx | Server Error |
+
+#### 기타 설명
+
+- HTTP 요청 헤더에 `Authorization-Refresh: Bearer {RefreshToken}` 형식으로 Refresh Token을 전달합니다.
+- Response에는 새로운 Access Token만 반환되며, Refresh Token은 반환되지 않습니다.
+- Refresh Token이 만료된 경우 401 에러가 발생하며, 사용자는 다시 로그인해야 합니다.
 
 ---
 
