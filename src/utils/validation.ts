@@ -32,17 +32,5 @@ export const sendCodeSchema = z.object({
   path: ['passwordConfirm'],
 });
 
-// 관리자 로그인 폼 검증 스키마
-export const adminLoginSchema = z.object({
-  username: z
-    .string()
-    .min(1, '사용자명을 입력해주세요'),
-
-  password: z
-    .string()
-    .min(1, '비밀번호를 입력해주세요'),
-});
-
 // 타입 추출
 export type SendCodeFormData = z.infer<typeof sendCodeSchema>;
-export type AdminLoginFormData = z.infer<typeof adminLoginSchema>;

@@ -209,73 +209,72 @@ try {
 
 ---
 
-### logout()
+### reissue()
 **위치**: `src/api/auth.api.ts`
 
-**목적**: 로그아웃 (서버에 알림)
+**목적**: Refresh Token으로 새 Access Token 발급
 
 **시그니처**:
 ```typescript
-async function logout(): Promise<void>
+async function reissue(): Promise<{ accessToken: string }>
 ```
 
-**파라미터**: 없음
+**파라미터**: 없음 (localStorage에서 refreshToken 자동 조회)
 
-**반환값**: 없음
+**반환값**: `{ accessToken: string }`
 
 **예외**:
-- `401`: 인증되지 않은 요청
-
-**사용 예시**:
-```typescript
-const handleLogout = async () => {
-  try {
-    await logout();
-    useAuthStore.getState().logout(); // 로컬 상태 정리
-    navigate('/login');
-  } catch (error) {
-    console.error('로그아웃 실패:', error);
-    // 에러가 나도 로컬 로그아웃은 진행
-    useAuthStore.getState().logout();
-    navigate('/login');
-  }
-};
-```
-
----
-
-### adminLogin()
-**위치**: `src/api/auth.api.ts`
-
-**목적**: 관리자 로그인
-
-**시그니처**:
-```typescript
-async function adminLogin(data: AdminLoginRequest): Promise<AuthResponse>
-```
-
-**파라미터**:
-- `data.username`: 관리자 사용자명
-- `data.password`: 비밀번호
-
-**반환값**: AuthResponse
-
-**예외**:
-- `401`: 인증 실패
-- `403`: 권한 없음 (관리자 아님)
+- `401`: Refresh Token 만료 또는 유효하지 않음
 
 **사용 예시**:
 ```typescript
 try {
-  const response = await adminLogin({
-    username: 'admin',
-    password: 'AdminPass123!',
-  });
-
-  useAuthStore.getState().login(response.accessToken, response.user);
-  navigate('/admin/dashboard');
+  const response = await reissue();
+  useAuthStore.getState().setAccessToken(response.accessToken);
 } catch (error) {
-  alert('관리자 로그인 실패');
+  // refreshToken 만료 - 재로그인 필요
+  useAuthStore.getState().clearAuth();
+  navigate('/login');
+}
+```
+
+---
+
+## 커스텀 훅
+
+### useSessionRestore()
+**위치**: `src/hooks/useSessionRestore.ts`
+
+**목적**: 앱 시작 시 세션 자동 복원
+
+**동작 원리**:
+```
+1. 앱 시작 → localStorage에서 refreshToken 확인
+2. refreshToken 존재 → /api/auth/reissue 호출
+3. 성공 → 새 accessToken 메모리에 저장, isAuthenticated = true
+4. 실패 → refreshToken 삭제, 로그인 페이지로 리다이렉트
+```
+
+**보안**:
+- accessToken: 메모리에만 저장 (XSS 안전)
+- refreshToken: localStorage에 저장 (영속성 확보)
+- 24시간 후 토큰 자동 만료
+
+**반환값**:
+```typescript
+{ isInitialized: boolean } // 세션 복원 완료 여부
+```
+
+**사용 예시** (App.tsx):
+```typescript
+function SessionProvider({ children }) {
+  const { isInitialized } = useSessionRestore();
+
+  if (!isInitialized) {
+    return <LoadingSpinner />;
+  }
+
+  return <>{children}</>;
 }
 ```
 
@@ -315,18 +314,18 @@ login('token123', { id: '1', email: 'user@example.com', role: 'USER' });
 
 ---
 
-#### logout()
+#### clearAuth()
 ```typescript
-logout: () => void
+clearAuth: () => void
 ```
-- 로그아웃 시 호출
-- 모든 상태 초기화
-- localStorage 클리어
+- 토큰 만료 시 내부에서 사용
+- 모든 인증 상태 초기화
+- localStorage에서 refreshToken 삭제
 
 **사용**:
 ```typescript
-const { logout } = useAuthStore();
-logout();
+const { clearAuth } = useAuthStore();
+clearAuth(); // 토큰 만료 시 호출
 ```
 
 ---
@@ -349,7 +348,12 @@ setAccessToken('newToken456');
 **컴포넌트에서 사용**:
 ```typescript
 function MyComponent() {
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, isInitialized } = useAuthStore();
+
+  // 세션 복원 중
+  if (!isInitialized) {
+    return <div>로딩 중...</div>;
+  }
 
   if (!isAuthenticated) {
     return <div>로그인이 필요합니다</div>;
@@ -358,7 +362,6 @@ function MyComponent() {
   return (
     <div>
       <p>환영합니다, {user.email}님!</p>
-      <button onClick={logout}>로그아웃</button>
     </div>
   );
 }
@@ -716,23 +719,6 @@ interface AuthLayoutProps {
 const { register, handleSubmit, formState: { errors } } = useForm({
   resolver: zodResolver(loginSchema),
 });
-```
-
----
-
-### adminLoginSchema
-**위치**: `src/utils/validation.ts`
-
-**목적**: 관리자 로그인 폼 검증 스키마
-
-**타입**: `z.ZodObject`
-
-**검증 규칙**:
-```typescript
-{
-  username: 입력 필수,
-  password: 입력 필수,
-}
 ```
 
 ---

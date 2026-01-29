@@ -67,7 +67,7 @@ apiClient.interceptors.response.use(
       } catch (reissueError) {
         // Refresh Token도 만료된 경우 로그아웃
         console.error('Token reissue failed:', reissueError);
-        useAuthStore.getState().logout();
+        useAuthStore.getState().clearAuth();
         window.location.href = '/login';
         return Promise.reject(reissueError);
       }

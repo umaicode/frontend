@@ -4,8 +4,6 @@ import type {
   SendCodeResponse,
   LoginRequest,
   LoginResponse,
-  AdminLoginRequest,
-  AuthResponse,
 } from '../types/auth.types';
 
 // 1단계: 인증번호 발송 (이메일 + 비밀번호)
@@ -18,11 +16,6 @@ export const sendCode = async (data: SendCodeRequest): Promise<SendCodeResponse>
 export const login = async (data: LoginRequest): Promise<LoginResponse> => {
   const response = await apiClient.post<LoginResponse>('/api/auth/verify', data);
   return response.data;
-};
-
-// 로그아웃
-export const logout = async (): Promise<void> => {
-  await apiClient.post('/api/auth/logout');
 };
 
 // 토큰 재발급
@@ -47,10 +40,4 @@ export const reissue = async (): Promise<{ accessToken: string }> => {
   return {
     accessToken: response.data.accessToken,
   };
-};
-
-// 관리자 로그인
-export const adminLogin = async (data: AdminLoginRequest): Promise<AuthResponse> => {
-  const response = await apiClient.post<AuthResponse>('/api/admin/auth/login', data);
-  return response.data;
 };

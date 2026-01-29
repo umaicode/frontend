@@ -41,12 +41,6 @@ export interface AuthResponse {
   user: User;
 }
 
-// 관리자 로그인 요청
-export interface AdminLoginRequest {
-  username: string;
-  password: string;
-}
-
 // API 에러 응답
 export interface ApiError {
   code: string;

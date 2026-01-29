@@ -516,7 +516,6 @@ import {
   LoginResponse,
   VerifyPinRequest,
   AuthResponse,
-  AdminLoginRequest,
 } from '../types/auth.types';
 
 // 일반 사용자 로그인 (1단계)
@@ -534,12 +533,6 @@ export const verifyPin = async (data: VerifyPinRequest): Promise<AuthResponse> =
 // 로그아웃
 export const logout = async (): Promise<void> => {
   await apiClient.post('/api/auth/logout');
-};
-
-// 관리자 로그인
-export const adminLogin = async (data: AdminLoginRequest): Promise<AuthResponse> => {
-  const response = await apiClient.post<AuthResponse>('/api/admin/auth/login', data);
-  return response.data;
 };
 ```
 

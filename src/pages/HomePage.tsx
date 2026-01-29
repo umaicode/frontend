@@ -4,26 +4,12 @@ import { useTicketStore } from '../store/ticketStore';
 import { useMissionStore } from '../store/missionStore';
 import { Button } from '@/components/ui/button';
 import TicketCard from '../components/ticket/TicketCard';
-import { logout as logoutApi } from '../api/auth.api';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { currentTicket } = useTicketStore();
   const { storedLuggages } = useMissionStore();
-
-  const handleLogout = async () => {
-    try {
-      await logoutApi();
-      logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-      // 에러가 나도 로컬 로그아웃은 진행
-      logout();
-      navigate('/login');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0064FF] to-[#4DA3FF]">
@@ -43,14 +29,6 @@ const HomePage = () => {
                 <p className="text-white/70 text-xs">스마트 짐 운반 서비스</p>
               </div>
             </div>
-
-            {/* 로그아웃 버튼 */}
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-white text-sm font-medium hover:bg-white/30 transition-all"
-            >
-              로그아웃
-            </button>
           </div>
         </div>
       </header>
