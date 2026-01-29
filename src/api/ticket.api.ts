@@ -9,35 +9,18 @@ import type { TicketScanResponse, TicketInfo } from '../types/ticket.types';
  * @returns 스캔된 티켓 정보
  */
 export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
-  // 🔶 MOCK: 티켓 스캔 목업 데이터
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      console.log('🔶 MOCK: scanTicket 호출됨', imageFile.name);
-      resolve({
-        flight: "KE932",
-        gate: "E23",
-        seat: "40B",
-        boarding_time: "21:20",
-        departure_time: "22:00",
-        origin: "ROME",
-        destination: "INCHEON"
-      });
-    }, 1500); // 1.5초 지연으로 스캔 중 느낌 연출
-  });
+  const formData = new FormData();
+  formData.append('file', imageFile);
 
-  // 실제 API 호출 (주석 처리)
-  // const formData = new FormData();
-  // formData.append('image', imageFile);
-  // const { data } = await apiClient.post<TicketScanResponse>(
-  //   '/api/tickets/scan',
-  //   formData,
-  //   {
-  //     headers: {
-  //       'Content-Type': 'multipart/form-data',
-  //     },
-  //   }
-  // );
-  // return data;
+  // axios가 FormData를 자동으로 감지하고 올바른 Content-Type 설정
+  // (multipart/form-data; boundary=----WebKitFormBoundary...)
+  // 수동으로 헤더를 설정하면 boundary 정보가 누락되어 405 에러 발생
+  const { data } = await apiClient.post<TicketInfo>(
+    '/ocr',
+    formData
+  );
+
+  return data;
 };
 
 /**

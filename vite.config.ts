@@ -12,5 +12,17 @@ export default defineConfig({
   },
   server: {
     port: 3000, // 백엔드 CORS 설정에 맞춰 포트 변경
+    proxy: {
+      // OCR API 프록시 설정 (CORS 우회)
+      '/ocr': {
+        target: 'http://i14e101.p.ssafy.io:8050',
+        changeOrigin: true,
+      },
+      // 일반 API 프록시 설정
+      '/api': {
+        target: 'http://i14e101.p.ssafy.io:8050',
+        changeOrigin: true,
+      },
+    },
   },
 })
