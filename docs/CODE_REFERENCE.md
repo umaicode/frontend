@@ -1665,4 +1665,752 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 ---
 
+## 9. OCR API 연결 및 트러블슈팅
+
+### 9.1 OCR API 구현 과정
+
+#### 배경
+프로젝트 초기에는 티켓 스캔 기능이 Mock 데이터로 구현되어 있었습니다. 실제 백엔드 OCR API(`http://i14e101.p.ssafy.io:8050/ocr`)와 연결하는 과정에서 CORS 에러와 405 에러를 해결했습니다.
+
+#### 구현 파일
+- `src/api/ticket.api.ts` (11-26): OCR API 호출
+- `vite.config.ts` (14-27): 프록시 설정 (CORS 해결)
+- `src/api/axios.ts` (5-11): baseURL 조건부 설정
+
+---
+
+### 9.2 트러블슈팅: CORS 에러
+
+**문제**:
+```
+Access to XMLHttpRequest at 'http://i14e101.p.ssafy.io:8050/ocr'
+from origin 'http://localhost:3000' has been blocked by CORS policy
+```
+
+**원인**:
+- 프론트엔드(localhost:3000)에서 백엔드(i14e101.p.ssafy.io:8050)로 직접 요청
+- 백엔드 서버가 CORS 헤더 미설정
+- 브라우저 보안 정책(Same-Origin Policy) 위반
+
+**해결 방법**:
+Vite 프록시 설정으로 개발 환경에서 CORS 우회
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  server: {
+    port: 3000,
+    proxy: {
+      '/ocr': {
+        target: 'http://i14e101.p.ssafy.io:8050',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://i14e101.p.ssafy.io:8050',
+        changeOrigin: true,
+      },
+    },
+  },
+})
+```
+
+```typescript
+// src/api/axios.ts
+const apiClient = axios.create({
+  // 개발 환경: Vite 프록시 사용 (baseURL = '')
+  // 프로덕션: 환경 변수 사용 (baseURL = VITE_API_BASE_URL)
+  baseURL: import.meta.env.DEV ? '' : import.meta.env.VITE_API_BASE_URL,
+  timeout: 10000,
+});
+```
+
+**동작 원리**:
+```
+브라우저 → /ocr 요청 (localhost:3000/ocr)
+    ↓
+Vite Dev Server (프록시)
+    ↓
+http://i14e101.p.ssafy.io:8050/ocr
+    ↓
+응답 ← (브라우저는 같은 origin으로 인식)
+```
+
+**학습 포인트**:
+- CORS는 **브라우저 보안 정책** (서버 간 통신에는 적용 안 됨)
+- 같은 origin(localhost:3000)으로 인식되면 CORS 제한 없음
+- Vite 프록시는 **개발 환경 전용** (프로덕션에서는 백엔드 CORS 설정 필요)
+
+---
+
+### 9.3 트러블슈팅: 405 Method Not Allowed ⭐ 핵심
+
+**문제**:
+```
+POST http://localhost:3000/ocr 405 (Method Not Allowed)
+```
+
+**원인**:
+Content-Type 헤더를 수동으로 설정하여 **boundary 정보 누락**
+
+```typescript
+// ❌ Bad: boundary 정보 누락
+const { data } = await apiClient.post('/ocr', formData, {
+  headers: {
+    'Content-Type': 'multipart/form-data'  // boundary 없음!
+  }
+});
+```
+
+**multipart/form-data의 올바른 형식**:
+```
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryXYZ123
+```
+
+**boundary란?**
+- 각 폼 필드를 구분하는 **구분자(delimiter)**
+- FormData의 각 항목을 백엔드가 파싱하려면 boundary 필수
+- 예시:
+  ```
+  ------WebKitFormBoundaryXYZ123
+  Content-Disposition: form-data; name="file"; filename="ticket.jpg"
+  Content-Type: image/jpeg
+
+  <바이너리 데이터>
+  ------WebKitFormBoundaryXYZ123--
+  ```
+
+**axios의 FormData 자동 처리**:
+- axios는 요청 body가 **FormData 인스턴스**인지 자동 감지
+- FormData 감지 시:
+  1. Content-Type 헤더를 **자동으로 생성**
+  2. 랜덤 boundary 생성 (예: `----WebKitFormBoundary7MA4YWxkTrZu0gW`)
+  3. 헤더에 boundary 포함: `multipart/form-data; boundary=...`
+- **수동으로 Content-Type을 설정하면 이 자동 처리가 무시됨!**
+
+**해결 방법**:
+```typescript
+// ✅ Good: axios가 자동으로 Content-Type 설정
+const { data } = await apiClient.post<TicketInfo>(
+  '/ocr',
+  formData
+  // headers 객체 제거 - axios가 자동 처리
+);
+```
+
+**Before/After 비교**:
+
+| 항목 | Before (수동 설정) | After (자동 처리) |
+|------|-------------------|------------------|
+| Content-Type | `multipart/form-data` | `multipart/form-data; boundary=----WebKitFormBoundary...` |
+| boundary | ❌ 없음 (누락) | ✅ 자동 생성 |
+| Status Code | 405 Method Not Allowed | 200 OK |
+| 백엔드 파싱 | ❌ 실패 (boundary 없어서 필드 구분 불가) | ✅ 성공 |
+
+**코드 변경사항**:
+
+```typescript
+// src/api/ticket.api.ts
+
+// Before (2026-01-28 이전)
+export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
+  const formData = new FormData();
+  formData.append('file', imageFile);
+
+  const { data } = await apiClient.post<TicketInfo>('/ocr', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',  // ❌ 수동 설정 → boundary 누락
+    },
+  });
+
+  return data;
+};
+
+// After (2026-01-29)
+export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
+  const formData = new FormData();
+  formData.append('file', imageFile);
+
+  // ✅ headers 제거 → axios가 자동으로 Content-Type 설정
+  const { data } = await apiClient.post<TicketInfo>('/ocr', formData);
+
+  return data;
+};
+```
+
+**학습 포인트**:
+1. **FormData 사용 시 Content-Type 헤더를 수동 설정하지 말 것** ⭐⭐⭐
+2. axios는 FormData를 자동으로 감지하고 올바른 헤더 설정
+3. 수동 설정 시 오히려 에러 발생 (boundary 누락)
+4. 백엔드는 boundary 없이는 multipart 요청을 파싱할 수 없음
+
+---
+
+### 9.4 성능 최적화
+
+**기존 방식 (Mock)**:
+- 1.5초 지연으로 스캔 중 느낌 연출
+- 실제 OCR 없이 하드코딩된 데이터 반환
+
+**개선 방식 (실제 API)**:
+- 실제 백엔드 OCR 엔진 사용
+- 티켓 이미지에서 실시간 정보 추출
+- 정확도 향상
+
+**Before/After**:
+```typescript
+// Before: Mock 데이터
+export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        flight: "KE932",
+        gate: "E23",
+        seat: "40B",
+        boarding_time: "2026-01-29T14:30:00",
+        departure_time: "2026-01-29T15:00:00",
+        origin: "ICN",
+        destination: "NRT",
+      });
+    }, 1500);
+  });
+};
+
+// After: 실제 OCR API
+export const scanTicket = async (imageFile: File): Promise<TicketInfo> => {
+  const formData = new FormData();
+  formData.append('file', imageFile);
+
+  const { data } = await apiClient.post<TicketInfo>('/ocr', formData);
+  return data;
+};
+```
+
+---
+
+### 9.5 코드 동작 원리
+
+#### 전체 플로우:
+
+```
+1. 사용자가 웹캠으로 티켓 촬영
+   ↓
+2. WebcamScanner.tsx: 이미지 캡처 (base64)
+   ↓
+3. base64 → File 객체 변환
+   ↓
+4. TicketScanPage.tsx: scanTicket() 호출
+   ↓
+5. ticket.api.ts: FormData 생성 및 API 호출
+   ↓
+6. axios.ts: Authorization 헤더 자동 추가
+   ↓
+7. axios.ts: FormData 감지 → Content-Type 자동 설정 (boundary 포함)
+   ↓
+8. Vite 프록시: localhost:3000/ocr → i14e101.p.ssafy.io:8050/ocr
+   ↓
+9. 백엔드 OCR 엔진: multipart 요청 파싱 및 이미지 분석
+   ↓
+10. 응답: TicketInfo JSON
+   ↓
+11. ticketStore: 데이터 저장
+   ↓
+12. HomePage: 티켓 카드 렌더링
+```
+
+#### 코드 세부 분석:
+
+**1. 이미지 캡처 (WebcamScanner.tsx:37-59)**
+```typescript
+const imageSrc = webcamRef.current.getScreenshot(); // base64
+const base64Data = imageSrc.split(',')[1];
+const binaryString = atob(base64Data);
+const bytes = new Uint8Array(binaryString.length);
+
+for (let i = 0; i < binaryString.length; i++) {
+  bytes[i] = binaryString.charCodeAt(i);
+}
+
+const blob = new Blob([bytes], { type: 'image/jpeg' });
+const file = new File([blob], 'ticket.jpg', { type: 'image/jpeg' });
+```
+
+**왜 이렇게?**
+- `getScreenshot()`은 base64 문자열 반환
+- FormData는 File 객체 필요
+- base64 → Blob → File 변환 과정 필요
+
+**2. API 호출 (ticket.api.ts:11-26)**
+```typescript
+const formData = new FormData();
+formData.append('file', imageFile);
+
+const { data } = await apiClient.post<TicketInfo>('/ocr', formData);
+return data;
+```
+
+**3. axios 인터셉터 (axios.ts)**
+
+**Request Interceptor (자동 토큰 추가)**
+```typescript
+apiClient.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().accessToken;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  // ⭐ FormData 감지 로직 (axios 내부)
+  if (config.data instanceof FormData) {
+    // Content-Type 헤더가 없으면 자동 생성
+    if (!config.headers['Content-Type']) {
+      const boundary = '----WebKitFormBoundary' + Math.random();
+      config.headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
+    }
+  }
+
+  return config;
+});
+```
+
+**자동 처리 항목**:
+1. **FormData 감지** → Content-Type 자동 설정 ⭐
+2. **인증 토큰 자동 추가** (Authorization: Bearer ...)
+3. **401 에러 시 토큰 자동 재발급** (Response Interceptor)
+
+---
+
+### 9.6 실전 활용 팁
+
+#### Tip 1: FormData 디버깅
+```typescript
+// FormData 내용 확인 (개발 환경)
+for (let [key, value] of formData.entries()) {
+  console.log(key, value);
+}
+
+// 출력:
+// file File {name: "ticket.jpg", size: 123456, type: "image/jpeg"}
+```
+
+#### Tip 2: Vite 프록시 확인
+```bash
+# Network 탭에서 확인
+Request URL: http://localhost:3000/ocr (프록시됨)
+Actual URL: http://i14e101.p.ssafy.io:8050/ocr (실제 전달)
+
+# Headers 탭에서 확인
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+#### Tip 3: 프로덕션 빌드 주의
+```typescript
+// 개발: baseURL = '' (프록시 사용)
+// 프로덕션: baseURL = VITE_API_BASE_URL (직접 호출)
+
+// 프로덕션에서는 백엔드 CORS 설정 필수!
+// 백엔드 설정 예시 (Spring Boot):
+@CrossOrigin(origins = "https://your-domain.com")
+```
+
+#### Tip 4: 에러 처리
+```typescript
+try {
+  const ticketData = await scanTicket(imageFile);
+  setTicket(ticketData);
+} catch (error) {
+  console.error('티켓 스캔 실패:', error);
+
+  // axios 에러 응답 확인
+  if (error.response) {
+    console.log('Status:', error.response.status);
+    console.log('Data:', error.response.data);
+  }
+
+  alert('티켓 스캔에 실패했습니다. 다시 시도해주세요.');
+}
+```
+
+---
+
+### 9.7 관련 파일
+
+| 파일 | 역할 | 주요 라인 |
+|------|------|----------|
+| `src/api/ticket.api.ts` | OCR API 호출 | 11-26 |
+| `vite.config.ts` | 프록시 설정 (CORS 해결) | 14-27 |
+| `src/api/axios.ts` | axios 인스턴스 + 인터셉터 | 5-11, 30-50 |
+| `src/components/ticket/WebcamScanner.tsx` | 이미지 캡처 (base64 → File) | 37-59 |
+| `src/pages/TicketScanPage.tsx` | 페이지 로직 | 14-34 |
+| `.env.development` | 환경 변수 | 2 |
+
+---
+
+## 10. 보관/반납 플로우 시스템
+
+### 10.1 개요
+
+미션 추적 화면에서 사용자는 로봇이 도착하면 짐을 **보관**하거나 **반납**할 수 있습니다. localStorage를 활용한 영구 저장과 무게 카운트업 애니메이션이 핵심입니다.
+
+#### 주요 컴포넌트
+- `MissionTypeSelector.tsx`: 보관/반납 선택 UI
+- `StorageFlowModal.tsx`: 보관 플로우 모달
+- `ReturnFlowModal.tsx`: 반납 플로우 모달
+- `VerificationModal.tsx`: 4자리 PIN 인증
+- `useWeightCountUp.ts`: 무게 카운트업 애니메이션 훅
+
+---
+
+### 10.2 보관 플로우
+
+#### 사용자 시나리오:
+1. 로봇 도착 (ARRIVED 상태)
+2. "잠금 해제" 버튼 클릭
+3. 4자리 PIN 입력 (VerificationModal)
+4. 인증 성공 → 로봇 잠금 해제 (UNLOCKED)
+5. **보관하기** 선택 (MissionTypeSelector)
+6. 무게 측정 애니메이션 (useWeightCountUp) - 2초간 카운트업
+7. 보관 완료 → localStorage에 저장
+8. 로봇 잠금 (LOCKED)
+9. 귀환 시작 (RETURNING)
+
+#### 코드 분석:
+
+**1. 보관하기 선택 (MissionTypeSelector.tsx)**
+```typescript
+<button
+  onClick={() => onSelect('storage')}
+  className="flex-1 p-6 bg-white rounded-2xl border-2 border-[#0064FF] text-left hover:shadow-lg transition-all"
+>
+  <div className="text-4xl mb-3">📦</div>
+  <h3 className="text-gray-900 text-lg font-bold mb-1">보관하기</h3>
+  <p className="text-gray-500 text-sm">짐을 로봇에 보관합니다</p>
+</button>
+```
+
+**2. 보관 플로우 모달 (StorageFlowModal.tsx)**
+```typescript
+const StorageFlowModal = ({ isOpen, onClose, missionId }: Props) => {
+  const [step, setStep] = useState<'measuring' | 'complete'>('measuring');
+  const weight = useWeightCountUp(isOpen, 15.0); // 무게 카운트업 (0 → 15.0kg)
+
+  useEffect(() => {
+    // 무게가 목표치에 도달하면 완료 단계로
+    if (weight >= 15.0) {
+      setTimeout(() => setStep('complete'), 500);
+    }
+  }, [weight]);
+
+  const handleComplete = () => {
+    // localStorage에 저장
+    const luggage: StoredLuggage = {
+      id: `${Date.now()}-${Math.random()}`,
+      weight: 15.0,
+      lockerName: 'A-12',
+      storedAt: new Date().toISOString(),
+    };
+
+    useMissionStore.getState().addLuggage(luggage);
+    toast.success('짐을 보관했습니다!');
+    onClose();
+  };
+
+  // ...
+};
+```
+
+**3. 무게 카운트업 (useWeightCountUp.ts)** ⭐ 핵심
+
+```typescript
+export const useWeightCountUp = (isActive: boolean, targetWeight: number) => {
+  const [weight, setWeight] = useState(0);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    const duration = 2000; // 2초
+    const steps = 60; // 60 프레임 (60fps)
+    const increment = targetWeight / steps;
+    let currentStep = 0;
+
+    const timer = setInterval(() => {
+      currentStep++;
+      setWeight(Math.min(currentStep * increment, targetWeight));
+
+      if (currentStep >= steps) {
+        clearInterval(timer);
+      }
+    }, duration / steps); // 2000ms / 60 ≈ 33.33ms
+
+    return () => clearInterval(timer); // ✅ cleanup
+  }, [isActive, targetWeight]);
+
+  return weight;
+};
+```
+
+**왜 이렇게?**
+- 실제 무게 측정 센서를 시뮬레이션
+- 2초 동안 부드럽게 카운트업 (0kg → 15.0kg)
+- 60 FPS로 애니메이션 (`duration / steps = 33.33ms`)
+- cleanup 함수로 메모리 누수 방지
+
+**애니메이션 동작 흐름**:
+```
+1. isActive = true → useEffect 실행
+2. setInterval 시작 (33.33ms마다)
+3. currentStep 증가 (0 → 60)
+4. weight 업데이트: 0 → 0.25 → 0.5 → ... → 15.0
+5. UI 렌더링 (무게 표시)
+6. 60단계 완료 → clearInterval
+7. 컴포넌트 unmount → cleanup 함수 실행
+```
+
+**4. localStorage 저장 (missionStore.ts:30-70)**
+```typescript
+addLuggage: (luggage: StoredLuggage) => {
+  set((state) => {
+    const newLuggages = [...state.storedLuggages, luggage];
+    localStorage.setItem('storedLuggages', JSON.stringify(newLuggages));
+    return { storedLuggages: newLuggages };
+  });
+}
+```
+
+---
+
+### 10.3 반납 플로우
+
+#### 사용자 시나리오:
+1. 홈 화면 → "내 보관함" 섹션에서 짐 확인
+2. "로봇 호출" → 미션 생성 (반납 모드)
+3. 로봇 도착 후 "잠금 해제"
+4. **반납하기** 선택
+5. 보관함에서 짐 선택 (ReturnFlowModal)
+6. 반납 확인
+7. localStorage에서 제거
+8. 로봇 잠금 및 귀환
+
+#### 코드 분석:
+
+**1. 반납할 짐 선택 (ReturnFlowModal.tsx)**
+```typescript
+const ReturnFlowModal = ({ isOpen, onClose, missionId }: Props) => {
+  const { storedLuggages, removeLuggage } = useMissionStore();
+  const [selectedLuggage, setSelectedLuggage] = useState<StoredLuggage | null>(null);
+
+  const handleReturn = () => {
+    if (selectedLuggage) {
+      removeLuggage(selectedLuggage.id);
+      toast.success('짐을 반납했습니다!');
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>반납할 짐 선택</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {storedLuggages.map((luggage) => (
+            <button
+              key={luggage.id}
+              onClick={() => setSelectedLuggage(luggage)}
+              className={cn(
+                'w-full p-4 rounded-lg border-2 text-left',
+                selectedLuggage?.id === luggage.id
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200'
+              )}
+            >
+              <p>무게: {luggage.weight}kg</p>
+              <p>보관함: {luggage.lockerName}</p>
+              <p>보관 시간: {new Date(luggage.storedAt).toLocaleString()}</p>
+            </button>
+          ))}
+        </div>
+
+        <Button onClick={handleReturn} disabled={!selectedLuggage}>
+          반납하기
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+};
+```
+
+**2. localStorage에서 제거 (missionStore.ts)**
+```typescript
+removeLuggage: (id: string) => {
+  set((state) => {
+    const filtered = state.storedLuggages.filter((l) => l.id !== id);
+    localStorage.setItem('storedLuggages', JSON.stringify(filtered));
+    return { storedLuggages: filtered };
+  });
+}
+```
+
+---
+
+### 10.4 데이터 구조
+
+#### StoredLuggage 타입:
+```typescript
+interface StoredLuggage {
+  id: string;          // 고유 ID (Date.now() + Math.random())
+  weight: number;      // 무게 (kg)
+  lockerName: string;  // 보관함 이름 (예: "A-12")
+  storedAt: string;    // 보관 시간 (ISO 8601)
+}
+```
+
+#### localStorage 저장 형식:
+```json
+{
+  "storedLuggages": [
+    {
+      "id": "1738051234567-0.123456",
+      "weight": 15.0,
+      "lockerName": "A-12",
+      "storedAt": "2026-01-29T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 10.5 트러블슈팅
+
+#### 문제 1: localStorage 초기화
+**증상**: 페이지 새로고침 시 보관함 데이터 사라짐
+
+**원인**: Store 초기화 시 localStorage 읽지 않음
+
+**해결**:
+```typescript
+// missionStore.ts
+const storedData = localStorage.getItem('storedLuggages');
+const initialLuggages = storedData ? JSON.parse(storedData) : [];
+
+export const useMissionStore = create<MissionState>((set) => ({
+  storedLuggages: initialLuggages,
+  // ...
+}));
+```
+
+#### 문제 2: 무게 애니메이션 버그
+**증상**: 모달 닫았다 다시 열면 애니메이션 중복 실행
+
+**원인**: useEffect cleanup 누락 → setInterval이 계속 실행됨
+
+**해결**:
+```typescript
+useEffect(() => {
+  // ...
+  const timer = setInterval(() => {
+    // ...
+  }, duration / steps);
+
+  return () => clearInterval(timer); // ✅ cleanup
+}, [isActive, targetWeight]);
+```
+
+#### 문제 3: weight가 0으로 리셋되지 않음
+**증상**: 모달을 닫고 다시 열면 이전 무게에서 시작
+
+**원인**: useState 초기값이 한 번만 설정됨
+
+**해결**:
+```typescript
+useEffect(() => {
+  if (!isActive) {
+    setWeight(0); // ✅ isActive가 false가 되면 리셋
+    return;
+  }
+  // ...
+}, [isActive, targetWeight]);
+```
+
+---
+
+### 10.6 성능 최적화
+
+**Before (setTimeout 방식)**:
+```typescript
+// 매번 새로운 배열 생성
+const addLuggage = (luggage) => {
+  const newLuggages = [...storedLuggages, luggage];
+  setStoredLuggages(newLuggages);
+  localStorage.setItem('storedLuggages', JSON.stringify(newLuggages));
+};
+
+// 문제점:
+// - localStorage 동기 쓰기 (블로킹)
+// - 매 렌더링마다 배열 재생성
+```
+
+**After (Zustand + 최적화)**:
+```typescript
+// Zustand의 함수형 업데이트 (불변성 유지)
+addLuggage: (luggage) => {
+  set((state) => {
+    const newLuggages = [...state.storedLuggages, luggage];
+    localStorage.setItem('storedLuggages', JSON.stringify(newLuggages));
+    return { storedLuggages: newLuggages };
+  });
+}
+
+// 향후 계획: localStorage 쓰기 throttle
+// import { debounce } from 'lodash';
+// const saveToStorage = debounce((data) => {
+//   localStorage.setItem('storedLuggages', JSON.stringify(data));
+// }, 500);
+```
+
+---
+
+### 10.7 학습 포인트
+
+1. **localStorage 영구 저장**
+   - Zustand Store는 메모리 상태 (새로고침 시 초기화)
+   - localStorage로 영구 저장 구현
+   - JSON.stringify/parse 필수
+   - 초기화 시 localStorage 데이터 읽기
+
+2. **카운트업 애니메이션**
+   - setInterval로 부드러운 애니메이션
+   - cleanup 함수로 메모리 누수 방지
+   - 60 FPS 유지 (`duration / steps`)
+   - isActive 플래그로 애니메이션 제어
+
+3. **모달 상태 관리**
+   - step으로 플로우 제어 ('measuring' → 'complete')
+   - 조건부 렌더링으로 UI 전환
+   - Dialog 컴포넌트 (shadcn/ui) 활용
+
+4. **TypeScript 타입 안정성**
+   - StoredLuggage 인터페이스로 타입 보장
+   - null 체크 (selectedLuggage?.id)
+   - 타입 추론 활용
+
+---
+
+### 10.8 관련 파일
+
+| 파일 | 역할 | 주요 라인 |
+|------|------|----------|
+| `src/components/mission/MissionTypeSelector.tsx` | 보관/반납 선택 UI | 전체 |
+| `src/components/mission/StorageFlowModal.tsx` | 보관 플로우 모달 | 전체 |
+| `src/components/mission/ReturnFlowModal.tsx` | 반납 플로우 모달 | 전체 |
+| `src/hooks/useWeightCountUp.ts` | 무게 애니메이션 훅 | 전체 |
+| `src/store/missionStore.ts` | 보관함 상태 관리 | 30-70 |
+
+---
+
 **이 문서는 코드 변경 시 함께 업데이트해야 합니다!**
+
+**최종 업데이트**: 2026년 1월 29일
+**업데이트 내용**: OCR API 트러블슈팅 (405 에러, axios FormData 자동 헤더 처리), 보관/반납 플로우 시스템 추가
