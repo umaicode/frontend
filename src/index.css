@@ -4,6 +4,15 @@
    CARRY PORTER - Toss 스타일 디자인 시스템
    ======================================== */
 
+/* ===== 커스텀 폰트 @font-face ===== */
+@font-face {
+  font-family: 'Beckman';
+  src: url('./assets/fonts/beckman-free.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Custom theme configuration */
 @theme {
   /* ===== Toss 블루 계열 (메인 브랜드 컬러) ===== */
