@@ -173,10 +173,10 @@ npx shadcn@latest add button dialog card input
 **네 가지 독립적인 Store:**
 
 - **authStore** (`src/store/authStore.ts`) ✅ 구현됨
-  - Access/Refresh Token 관리
+  - Access Token 관리 (메모리)
   - 사용자 정보 (User)
   - 로그인/로그아웃 액션
-  - **주의**: refreshToken은 localStorage에 영구 저장, accessToken은 메모리만
+  - **주의**: refreshToken은 httpOnly 쿠키로 관리 (백엔드 설정), accessToken은 메모리만
 
 - **ticketStore** (`src/store/ticketStore.ts`) ✅ 구현됨
   - 티켓 정보 (OCR 결과)
@@ -240,8 +240,10 @@ npx shadcn@latest add button dialog card input
 
 **토큰 관리**:
 - Access Token: Zustand Store (메모리)
-- Refresh Token: localStorage 영구 저장 (향후 구현 예정)
-- 401 에러 시 자동 로그아웃 (`axios.ts` interceptor)
+- Refresh Token: httpOnly 쿠키 (백엔드에서 Set-Cookie로 설정)
+- 401 에러 시 자동 토큰 재발급 (`axios.ts` interceptor)
+- 쿠키는 `withCredentials: true`로 자동 전송
+- Refresh Token 만료 시 자동 로그아웃 및 `/login` 리다이렉트
 
 **Protected Routes**: `src/routes/ProtectedRoute.tsx`에서 `isAuthenticated` 체크. 미인증 시 `/login` 리다이렉트.
 
